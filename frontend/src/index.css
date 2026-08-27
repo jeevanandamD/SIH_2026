@@ -1,0 +1,71 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+:root {
+  --color-ocean-900: #0a1628;
+  --color-ocean-800: #0f2035;
+  --color-ocean-700: #152d4a;
+  --color-ocean-600: #1b3a5e;
+  --color-ocean-500: #214f7a;
+  --color-ocean-400: #3b7dd8;
+  --color-ocean-300: #60a5fa;
+  --color-ocean-200: #93c5fd;
+  --color-ocean-100: #dbeafe;
+
+  --color-risk-high: #ef4444;
+  --color-risk-medium: #f59e0b;
+  --color-risk-low: #22c55e;
+
+  --color-sonar-green: #00ff88;
+  --color-sonar-blue: #0088ff;
+  --color-sonar-amber: #ffaa00;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--color-ocean-900);
+  color: #e2e8f0;
+}
+
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  background: #0a1628;
+}
+
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-ocean-800);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-ocean-500);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-ocean-400);
+}
+
+/* Risk badge colors */
+.risk-high { background-color: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); }
+.risk-medium { background-color: rgba(245, 158, 11, 0.15); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.3); }
+.risk-low { background-color: rgba(34, 197, 94, 0.15); color: #86efac; border: 1px solid rgba(34, 197, 94, 0.3); }
+
+/* Pulse animation for high-risk markers */
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(2); opacity: 0; }
+}
+.pulse-ring {
+  animation: pulse-ring 1.5s ease-out infinite;
+}
