@@ -77,20 +77,37 @@ class AnomalyDetector:
 
     def score(self, patch: np.ndarray) -> float:
         self.load()
-        if self.backbone is None or self.memory_bank is None:
+        if self.backbone is not None and self.memory_bank is not None:
+            try:
+                feature = self._extract_features([patch])[0]
+                dists = np.linalg.norm(self.memory_bank - feature, axis=1)
+                min_dist = float(np.min(dists))
+                max_possible = 100.0
+                score = min(min_dist / max_possible, 1.0)
+                return max(0.0, min(1.0, score))
+            except Exception as e:
+                print(f"Neural anomaly score fallback: {e}")
+
+        # Acoustic statistical anomaly scoring
+        if len(patch.shape) == 3:
+            gray = cv2.cvtColor(patch, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = patch
+
+        if gray.size == 0:
             return 0.5
 
-        import torch
+        p_std = float(np.std(gray))
+        p_contrast = float(np.max(gray) - np.min(gray))
+        p_mean = float(np.mean(gray))
 
-        feature = self._extract_features([patch])[0]
+        # Deviation from normal seabed (typical seabed: mean ~85, std ~20, contrast ~80)
+        z_contrast = abs(p_contrast - 80.0) / 120.0
+        z_std = abs(p_std - 20.0) / 40.0
+        z_mean = abs(p_mean - 85.0) / 85.0
 
-        dists = np.linalg.norm(self.memory_bank - feature, axis=1)
-        min_dist = float(np.min(dists))
-
-        max_possible = 100.0
-        score = min(min_dist / max_possible, 1.0)
-
-        return score
+        raw_score = 0.4 * z_contrast + 0.4 * z_std + 0.2 * z_mean
+        return float(max(0.1, min(0.95, raw_score)))
 
     def score_detections(self, image: np.ndarray, detections: list[dict]) -> list[float]:
         scores = []

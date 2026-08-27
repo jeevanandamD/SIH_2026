@@ -32,6 +32,16 @@ export const surveyApi = {
     return data;
   },
 
+  delete: async (id: string): Promise<{ status: string }> => {
+    const { data } = await api.delete(`/surveys/${id}`);
+    return data;
+  },
+
+  generateDemo: async (): Promise<{ status: string; surveys_created: string[] }> => {
+    const { data } = await api.post('/surveys/demo/generate');
+    return data;
+  },
+
   process: async (id: string): Promise<{ status: string }> => {
     const { data } = await api.post(`/surveys/${id}/process`);
     return data;
@@ -56,6 +66,10 @@ export const detectionApi = {
     const { data } = await api.post(`/detections/${id}/verify`, feedback);
     return data;
   },
+
+  getCropUrl: (id: string): string => {
+    return `/api/detections/${id}/crop`;
+  },
 };
 
 export const targetApi = {
@@ -71,6 +85,13 @@ export const targetApi = {
 
   heatmap: async (): Promise<HeatmapPoint[]> => {
     const { data } = await api.get('/targets/heatmap');
+    return data;
+  },
+
+  exportCsvUrl: '/api/export/csv',
+
+  exportMissionPlan: async (): Promise<any> => {
+    const { data } = await api.get('/export/mission-plan');
     return data;
   },
 };

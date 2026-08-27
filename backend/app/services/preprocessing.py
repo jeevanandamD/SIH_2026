@@ -51,12 +51,47 @@ def detect_shadow_region(target_mask: np.ndarray, image: np.ndarray, angle_offse
     pts = np.clip(pts, [0, 0], [w - 1, h - 1])
     cv2.fillPoly(shifted_mask, [pts], 1)
 
-    shadow_region = cv2.bitand(shifted_mask, cv2.bitwise_not(target_mask.astype(np.uint8)))
-    shadow_mask = cv2.bitand(shadow_region, cv2.bitwise_not(target_mask.astype(np.uint8)))
+    shadow_region = cv2.bitwise_and(shifted_mask, cv2.bitwise_not(target_mask.astype(np.uint8)))
+    shadow_mask = cv2.bitwise_and(shadow_region, cv2.bitwise_not(target_mask.astype(np.uint8)))
 
     shadow_mask = cv2.dilate(shadow_mask.astype(np.uint8), shadow_kernel, iterations=1)
 
     return shadow_mask.astype(np.uint8)
+
+
+def slant_range_correction(image: np.ndarray, altitude_px: int = 40) -> np.ndarray:
+    """
+    Performs slant-range correction on side-scan sonar image using towfish altitude.
+    Converts slant-range coordinates to true ground-range coordinates.
+    """
+    h, w = image.shape[:2]
+    mid = w // 2
+    if altitude_px <= 0 or altitude_px >= mid:
+        return image
+
+    corrected = np.zeros_like(image)
+    for ch in range(image.shape[2] if len(image.shape) == 3 else 1):
+        for side in [0, 1]:  # 0: port (left), 1: starboard (right)
+            for x_ground in range(mid):
+                # Slant range r = sqrt(y_ground^2 + h^2)
+                r = int(np.sqrt(x_ground ** 2 + altitude_px ** 2))
+                if r < mid:
+                    if side == 0:
+                        # Left side (port): mid - x_ground
+                        src_x = mid - r
+                        dst_x = mid - x_ground
+                    else:
+                        # Right side (starboard): mid + x_ground
+                        src_x = mid + r
+                        dst_x = mid + x_ground
+
+                    if 0 <= src_x < w and 0 <= dst_x < w:
+                        if len(image.shape) == 3:
+                            corrected[:, dst_x, ch] = image[:, src_x, ch]
+                        else:
+                            corrected[:, dst_x] = image[:, src_x]
+
+    return corrected
 
 
 def extract_bounding_box_crop(image: np.ndarray, x1: int, y1: int, x2: int, y2: int, padding: int = 20) -> np.ndarray:

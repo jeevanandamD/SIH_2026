@@ -2,22 +2,41 @@ import os
 import uuid
 import json
 from pathlib import Path
-from ..models.database import SessionLocal, Survey, SonarImage
-from ..config import RAW_DIR
+from ..models.database import SessionLocal, Survey, SonarImage, Detection
 
 
-def create_survey(name: str, file_path: str | None = None) -> dict:
+def create_survey(
+    name: str,
+    file_path: str | None = None,
+    vessel_id: str | None = "INS Nireekshak / Survey AUV-1",
+    area_name: str | None = "Arabian Sea - Offshore Sector 4",
+    sonar_type: str | None = "EdgeTech 4200 Dual-Frequency SSS (400/900 kHz)",
+    start_time: str | None = None,
+    end_time: str | None = None,
+) -> dict:
     db = SessionLocal()
     try:
         survey_id = f"survey_{uuid.uuid4().hex[:8]}"
         survey = Survey(
             survey_id=survey_id,
             name=name,
+            vessel_id=vessel_id,
+            area_name=area_name,
+            sonar_type=sonar_type,
+            start_time=start_time or "2026-08-27 08:30:00 UTC",
+            end_time=end_time or "2026-08-27 14:45:00 UTC",
             status="uploaded",
         )
         db.add(survey)
         db.commit()
-        return {"survey_id": survey_id, "name": name, "status": "uploaded"}
+        return {
+            "survey_id": survey_id,
+            "name": name,
+            "vessel_id": vessel_id,
+            "area_name": area_name,
+            "sonar_type": sonar_type,
+            "status": "uploaded",
+        }
     finally:
         db.close()
 
@@ -71,7 +90,10 @@ def list_surveys() -> list[dict]:
         surveys = db.query(Survey).all()
         result = []
         for s in surveys:
-            image_count = db.query(SonarImage).filter(SonarImage.survey_id == s.survey_id).count()
+            images = db.query(SonarImage).filter(SonarImage.survey_id == s.survey_id).all()
+            image_ids = [img.image_id for img in images]
+            detection_count = db.query(Detection).filter(Detection.image_id.in_(image_ids)).count() if image_ids else 0
+
             result.append({
                 "survey_id": s.survey_id,
                 "name": s.name,
@@ -81,7 +103,8 @@ def list_surveys() -> list[dict]:
                 "area_name": s.area_name,
                 "sonar_type": s.sonar_type,
                 "status": s.status,
-                "image_count": image_count,
+                "image_count": len(images),
+                "detection_count": detection_count,
             })
         return result
     finally:
@@ -94,7 +117,9 @@ def get_survey(survey_id: str) -> dict | None:
         survey = db.query(Survey).filter(Survey.survey_id == survey_id).first()
         if not survey:
             return None
-        image_count = db.query(SonarImage).filter(SonarImage.survey_id == survey_id).count()
+        images = db.query(SonarImage).filter(SonarImage.survey_id == survey_id).all()
+        image_ids = [img.image_id for img in images]
+        detection_count = db.query(Detection).filter(Detection.image_id.in_(image_ids)).count() if image_ids else 0
         return {
             "survey_id": survey.survey_id,
             "name": survey.name,
@@ -104,7 +129,8 @@ def get_survey(survey_id: str) -> dict | None:
             "area_name": survey.area_name,
             "sonar_type": survey.sonar_type,
             "status": survey.status,
-            "image_count": image_count,
+            "image_count": len(images),
+            "detection_count": detection_count,
         }
     finally:
         db.close()

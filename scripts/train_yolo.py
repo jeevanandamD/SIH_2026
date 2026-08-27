@@ -6,9 +6,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from ultralytics import YOLO
 
 
-def train_detection(data_yaml: str, epochs: int = 100, imgsz: int = 640, batch: int = 4):
+import torch
+
+DEVICE_ARG = 0 if torch.cuda.is_available() else "cpu"
+
+
+def train_detection(data_yaml: str, epochs: int = 25, imgsz: int = 640, batch: int = 4):
     print(f"Training YOLOv8n detection on {data_yaml}")
-    print(f"  Epochs: {epochs}, Image size: {imgsz}, Batch: {batch}")
+    print(f"  Epochs: {epochs}, Image size: {imgsz}, Batch: {batch}, Device: {DEVICE_ARG}")
 
     model = YOLO("yolov8n.pt")
     results = model.train(
@@ -16,10 +21,10 @@ def train_detection(data_yaml: str, epochs: int = 100, imgsz: int = 640, batch: 
         epochs=epochs,
         imgsz=imgsz,
         batch=batch,
-        device=0,
-        amp=True,
-        patience=20,
-        workers=4,
+        device=DEVICE_ARG,
+        amp=torch.cuda.is_available(),
+        patience=10,
+        workers=0,
         project="models",
         name="yolov8n_sss",
     )
@@ -35,9 +40,9 @@ def train_detection(data_yaml: str, epochs: int = 100, imgsz: int = 640, batch: 
     return results
 
 
-def train_segmentation(data_yaml: str, epochs: int = 100, imgsz: int = 640, batch: int = 4):
+def train_segmentation(data_yaml: str, epochs: int = 25, imgsz: int = 640, batch: int = 4):
     print(f"Training YOLOv8n-seg on {data_yaml}")
-    print(f"  Epochs: {epochs}, Image size: {imgsz}, Batch: {batch}")
+    print(f"  Epochs: {epochs}, Image size: {imgsz}, Batch: {batch}, Device: {DEVICE_ARG}")
 
     model = YOLO("yolov8n-seg.pt")
     results = model.train(
@@ -45,10 +50,10 @@ def train_segmentation(data_yaml: str, epochs: int = 100, imgsz: int = 640, batc
         epochs=epochs,
         imgsz=imgsz,
         batch=batch,
-        device=0,
-        amp=True,
-        patience=20,
-        workers=4,
+        device=DEVICE_ARG,
+        amp=torch.cuda.is_available(),
+        patience=10,
+        workers=0,
         project="models",
         name="yolov8n_seg_sss",
     )

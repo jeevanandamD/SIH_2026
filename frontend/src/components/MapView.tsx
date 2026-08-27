@@ -1,13 +1,16 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import type { GeoJSONCollection, GeoJSONFeature } from '../types';
+import Heatmap from './Heatmap';
+import type { GeoJSONCollection, GeoJSONFeature, HeatmapPoint } from '../types';
 import { RISK_COLORS } from '../types';
 
 interface MapViewProps {
   geojson: GeoJSONCollection | null;
   onFeatureClick: (feature: GeoJSONFeature) => void;
   selectedId: string | null;
+  heatmapPoints?: HeatmapPoint[];
+  showHeatmap?: boolean;
 }
 
 function createRiskIcon(riskLevel: string): L.DivIcon {
@@ -31,9 +34,9 @@ function createRiskIcon(riskLevel: string): L.DivIcon {
           width: ${size}px;
           height: ${size}px;
           background: ${color};
-          border: 2px solid rgba(255,255,255,0.8);
+          border: 2px solid rgba(255,255,255,0.9);
           border-radius: 50%;
-          box-shadow: 0 0 10px ${color}88;
+          box-shadow: 0 0 12px ${color}aa;
         "></div>
       </div>
     `,
@@ -54,8 +57,8 @@ function createSelectedIcon(riskLevel: string): L.DivIcon {
         background: ${color};
         border: 3px solid #ffffff;
         border-radius: 50%;
-        box-shadow: 0 0 20px ${color}, 0 0 40px ${color}66;
-        transform: scale(1.2);
+        box-shadow: 0 0 20px ${color}, 0 0 40px ${color}88;
+        transform: scale(1.25);
       "></div>
     `,
     iconSize: [24, 24],
@@ -63,42 +66,59 @@ function createSelectedIcon(riskLevel: string): L.DivIcon {
   });
 }
 
-function MapEvents({
-  onFeatureClick,
+function MapBoundsController({
+  geojson,
+  selectedId,
 }: {
-  onFeatureClick: (f: GeoJSONFeature) => void;
+  geojson: GeoJSONCollection | null;
+  selectedId: string | null;
 }) {
-  return null;
-}
-
-function FlyToMarker({ selectedId, geojson }: { selectedId: string | null; geojson: GeoJSONCollection | null }) {
   const map = useMap();
 
   useEffect(() => {
-    if (!selectedId || !geojson) return;
-    const feature = geojson.features.find(
-      (f) => f.properties.detection_id === selectedId
-    );
-    if (feature) {
-      const [lng, lat] = feature.geometry.coordinates;
-      map.flyTo([lat, lng], Math.max(map.getZoom(), 14), { duration: 1 });
+    if (selectedId && geojson) {
+      const feature = geojson.features.find(
+        (f) => f.properties.detection_id === selectedId
+      );
+      if (feature) {
+        const [lng, lat] = feature.geometry.coordinates;
+        map.flyTo([lat, lng], Math.max(map.getZoom(), 15), { duration: 1.2 });
+      }
+    } else if (geojson && geojson.features.length > 0) {
+      const validCoords = geojson.features
+        .map((f) => f.geometry.coordinates)
+        .filter(([lng, lat]) => lat !== 0 && lng !== 0);
+
+      if (validCoords.length > 0) {
+        const bounds = L.latLngBounds(
+          validCoords.map(([lng, lat]) => [lat, lng] as [number, number])
+        );
+        map.fitBounds(bounds, { padding: [60, 60], maxZoom: 14 });
+      }
     }
   }, [selectedId, geojson, map]);
 
   return null;
 }
 
-export default function MapView({ geojson, onFeatureClick, selectedId }: MapViewProps) {
-  const defaultCenter: [number, number] = [12.9716, 77.5946]; // Bangalore fallback
+export default function MapView({
+  geojson,
+  onFeatureClick,
+  selectedId,
+  heatmapPoints = [],
+  showHeatmap = false,
+}: MapViewProps) {
+  const defaultCenter: [number, number] = [15.4208, 73.7845]; // Arabian Sea default
 
-  const featuresWithCoords = geojson?.features.filter(
-    (f) => f.geometry.coordinates[0] !== 0 && f.geometry.coordinates[1] !== 0
-  ) || [];
+  const featuresWithCoords =
+    geojson?.features.filter(
+      (f) => f.geometry.coordinates[0] !== 0 && f.geometry.coordinates[1] !== 0
+    ) || [];
 
   return (
     <MapContainer
       center={defaultCenter}
-      zoom={5}
+      zoom={6}
       className="h-full w-full"
       zoomControl={false}
     >
@@ -106,9 +126,13 @@ export default function MapView({ geojson, onFeatureClick, selectedId }: MapView
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>'
         url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
       />
-      <FlyToMarker selectedId={selectedId} geojson={geojson} />
+      <MapBoundsController selectedId={selectedId} geojson={geojson} />
+      
+      {/* Heatmap Layer inside MapContainer */}
+      <Heatmap points={heatmapPoints} visible={showHeatmap} />
+
       {featuresWithCoords.map((feature) => {
-        const { detection_id, risk_level, target_id, object_class, confidence } =
+        const { detection_id, risk_level, target_id, object_class, confidence, depth, risk_score } =
           feature.properties;
         const [lng, lat] = feature.geometry.coordinates;
         const isSelected = detection_id === selectedId;
@@ -123,24 +147,32 @@ export default function MapView({ geojson, onFeatureClick, selectedId }: MapView
             }}
           >
             <Popup className="dark-popup">
-              <div className="text-sm">
-                <div className="font-bold text-base">{target_id}</div>
-                <div className="text-gray-300">{object_class}</div>
-                <div className="mt-1">
-                  <span className="text-gray-400">Confidence:</span>{' '}
-                  <span className="font-mono">{(confidence * 100).toFixed(1)}%</span>
+              <div className="text-xs p-1">
+                <div className="font-bold text-sm text-white">{target_id}</div>
+                <div className="text-blue-400 capitalize font-medium">{object_class.replace('_', ' ')}</div>
+                <div className="mt-2 space-y-1 text-gray-300">
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gray-400">Risk Level:</span>
+                    <span
+                      className="font-bold uppercase"
+                      style={{ color: RISK_COLORS[risk_level] }}
+                    >
+                      {risk_level} ({(risk_score * 100).toFixed(0)}%)
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <span className="text-gray-400">Confidence:</span>
+                    <span className="font-mono">{(confidence * 100).toFixed(1)}%</span>
+                  </div>
+                  {depth != null && (
+                    <div className="flex justify-between gap-3">
+                      <span className="text-gray-400">Bathymetry:</span>
+                      <span className="font-mono">{depth.toFixed(1)} m depth</span>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <span className="text-gray-400">Risk:</span>{' '}
-                  <span
-                    className="font-bold"
-                    style={{ color: RISK_COLORS[risk_level] }}
-                  >
-                    {risk_level}
-                  </span>
-                </div>
-                <div className="text-gray-500 text-xs mt-1">
-                  {lat.toFixed(6)}, {lng.toFixed(6)}
+                <div className="text-gray-500 font-mono text-[10px] mt-2 pt-1 border-t border-gray-700">
+                  {lat.toFixed(5)}°N, {lng.toFixed(5)}°E
                 </div>
               </div>
             </Popup>

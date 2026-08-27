@@ -69,3 +69,25 @@ html, body, #root {
 .pulse-ring {
   animation: pulse-ring 1.5s ease-out infinite;
 }
+
+/* Dark Leaflet Popup Styling */
+.dark-popup .leaflet-popup-content-wrapper {
+  background: #0f2035 !important;
+  color: #f1f5f9 !important;
+  border: 1px solid #1b3a5e !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8) !important;
+  padding: 4px !important;
+}
+.dark-popup .leaflet-popup-tip {
+  background: #0f2035 !important;
+  border: 1px solid #1b3a5e !important;
+}
+.dark-popup .leaflet-popup-close-button {
+  color: #94a3b8 !important;
+  top: 8px !important;
+  right: 8px !important;
+}
+.dark-popup .leaflet-popup-close-button:hover {
+  color: #f8fafc !important;
+}

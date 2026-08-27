@@ -7,10 +7,26 @@ RAW_DIR = DATA_DIR / "raw"
 PROCESSED_DIR = DATA_DIR / "processed"
 WEIGHTS_DIR = BASE_DIR / "backend" / "weights"
 MODELS_DIR = BASE_DIR / "models"
-
 DB_PATH = BASE_DIR / "sonaris.db"
 
-DEVICE = "cuda" if os.environ.get("SONARIS_DEVICE", "auto") == "auto" else "cpu"
+try:
+    import torch
+    CUDA_AVAILABLE = torch.cuda.is_available()
+except Exception:
+    CUDA_AVAILABLE = False
+
+requested_device = os.environ.get("SONARIS_DEVICE", "auto")
+if requested_device == "cpu":
+    DEVICE = "cpu"
+elif requested_device == "cuda":
+    DEVICE = "cuda" if CUDA_AVAILABLE else "cpu"
+else:  # auto
+    DEVICE = "cuda" if CUDA_AVAILABLE else "cpu"
+
+RAW_DIR.mkdir(parents=True, exist_ok=True)
+PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+WEIGHTS_DIR.mkdir(parents=True, exist_ok=True)
+MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 # YOLO settings
 YOLO_DETECT_WEIGHTS = WEIGHTS_DIR / "yolov8n_sss.pt"

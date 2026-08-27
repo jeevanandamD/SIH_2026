@@ -25,7 +25,7 @@ _detection_counter = 0
 def _next_detection_id() -> str:
     global _detection_counter
     _detection_counter += 1
-    return f"AS_{_detection_counter:06d}"
+    return f"AS_{uuid.uuid4().hex[:4].upper()}_{_detection_counter:04d}"
 
 
 def process_survey(survey_id: str):
@@ -39,6 +39,16 @@ def process_survey(survey_id: str):
             update_survey_status(survey_id, "completed")
             db.commit()
             return
+
+        # Clean existing detections for these images
+        for img_record in images:
+            old_dets = db.query(Detection).filter(Detection.image_id == img_record.image_id).all()
+            for d in old_dets:
+                db.query(Anomaly).filter(Anomaly.detection_id == d.detection_id).delete()
+                db.query(AcousticFeatures).filter(AcousticFeatures.detection_id == d.detection_id).delete()
+                db.query(RiskAssessment).filter(RiskAssessment.detection_id == d.detection_id).delete()
+                db.delete(d)
+        db.commit()
 
         all_detections = []
 
