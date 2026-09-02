@@ -51,7 +51,7 @@ async def api_create_survey(
             add_images_to_survey(
                 result["survey_id"],
                 [str(file_path)],
-                [{"latitude": 15.4208, "longitude": 73.7845, "depth": 38.5, "timestamp": "2026-08-27T10:15:00Z"}]
+                [{"latitude": 15.4208, "longitude": 72.5000, "depth": 38.5, "timestamp": "2026-08-27T10:15:00Z"}]
             )
         elif ext in [".zip"]:
             import zipfile
@@ -62,11 +62,11 @@ async def api_create_survey(
             extracted_imgs = [str(p) for p in survey_dir.rglob("*") if p.suffix.lower() in image_extensions]
             if extracted_imgs:
                 meta = []
-                base_lat, base_lon = 15.4208, 73.7845
+                base_lat, base_lon = 15.4208, 72.5000
                 for idx in range(len(extracted_imgs)):
                     meta.append({
-                        "latitude": base_lat + idx * 0.002,
-                        "longitude": base_lon + idx * 0.002,
+                        "latitude": base_lat + idx * 0.001,
+                        "longitude": base_lon - idx * 0.001,
                         "depth": 35.0 + idx * 1.5,
                         "timestamp": f"2026-08-27T10:{15 + idx:02d}:00Z",
                     })
@@ -140,7 +140,7 @@ def api_generate_demo_surveys():
             "area_name": "Offshore Mumbai Basin - Pipeline Sector 4",
             "sonar_type": "EdgeTech 4200 Dual-Frequency SSS (400/900 kHz)",
             "start_lat": 18.9220,
-            "start_lon": 72.8340,
+            "start_lon": 72.3000,
             "delta_lat": 0.0035,
             "delta_lon": 0.0040,
             "depth_base": 42.0,
@@ -157,8 +157,8 @@ def api_generate_demo_surveys():
             "vessel_id": "ICGS Samarth / Autonomous Towfish SSS-2",
             "area_name": "Palk Strait Marine Biosphere Corridor",
             "sonar_type": "Klein 4900 High-Resolution Dual-Beam SSS",
-            "start_lat": 9.2876,
-            "start_lon": 79.3129,
+            "start_lat": 9.7876,
+            "start_lon": 79.5129,
             "delta_lat": 0.0030,
             "delta_lon": 0.0025,
             "depth_base": 24.5,
@@ -175,7 +175,7 @@ def api_generate_demo_surveys():
             "area_name": "Kochi Harbor Approach & Anchorage Area",
             "sonar_type": "L3Harris SeaBat T50-R / EdgeTech SSS",
             "start_lat": 9.9650,
-            "start_lon": 76.2210,
+            "start_lon": 75.8210,
             "delta_lat": 0.0028,
             "delta_lon": 0.0032,
             "depth_base": 32.0,

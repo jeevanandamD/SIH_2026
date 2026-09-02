@@ -4,6 +4,7 @@ import L from 'leaflet';
 import Heatmap from './Heatmap';
 import type { GeoJSONCollection, GeoJSONFeature, HeatmapPoint } from '../types';
 import { RISK_COLORS } from '../types';
+import { detectionApi } from '../api/client';
 
 interface MapViewProps {
   geojson: GeoJSONCollection | null;
@@ -123,8 +124,10 @@ export default function MapView({
       zoomControl={false}
     >
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>'
-        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+        attribution='&copy; Google Maps'
+        url="https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
+        maxNativeZoom={20}
+        maxZoom={22}
       />
       <MapBoundsController selectedId={selectedId} geojson={geojson} />
       
@@ -150,6 +153,18 @@ export default function MapView({
               <div className="text-xs p-1">
                 <div className="font-bold text-sm text-white">{target_id}</div>
                 <div className="text-blue-400 capitalize font-medium">{object_class.replace('_', ' ')}</div>
+                
+                <div className="mt-2 mb-2 w-full h-24 bg-gray-800 rounded overflow-hidden flex items-center justify-center border border-gray-700">
+                  <img 
+                    src={detectionApi.getCropUrl(detection_id)} 
+                    alt={target_id}
+                    className="max-w-full max-h-full object-contain"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                </div>
+
                 <div className="mt-2 space-y-1 text-gray-300">
                   <div className="flex justify-between gap-3">
                     <span className="text-gray-400">Risk Level:</span>
