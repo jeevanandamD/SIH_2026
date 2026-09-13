@@ -165,6 +165,21 @@ def generate_synthetic_sonar_image(
 
             conf = round(random.uniform(0.78, 0.96), 3)
 
+            # Instance segmentation polygon (convex hull of the target mask,
+            # translated to absolute image coordinates and normalized to
+            # [0, 1] for YOLO-seg label export).
+            ys_nz, xs_nz = np.where(target_roi > 0)
+            segmentation = None
+            if xs_nz.size >= 3:
+                pts = np.column_stack([xs_nz, ys_nz]).astype(np.int32)
+                hull = cv2.convexHull(pts).reshape(-1, 2)
+                segmentation = []
+                for (px, py) in hull:
+                    abs_x = tx + int(px)
+                    abs_y = ty + int(py)
+                    segmentation.append(round(min(1.0, max(0.0, abs_x / width)), 6))
+                    segmentation.append(round(min(1.0, max(0.0, abs_y / height)), 6))
+
             placed_detections.append({
                 "bbox": {
                     "x1": bbox_x1,
@@ -181,6 +196,7 @@ def generate_synthetic_sonar_image(
                 "confidence": conf,
                 "class_id": ["fishing_gear", "container", "wreckage", "artificial_object"].index(cls),
                 "class_name": cls,
+                "segmentation": segmentation,
             })
 
     image = cv2.GaussianBlur(image, (3, 3), 0.5)

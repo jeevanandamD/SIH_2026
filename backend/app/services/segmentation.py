@@ -7,21 +7,36 @@ from ..config import YOLO_SEG_WEIGHTS, YOLO_CONFIDENCE, YOLO_IMGSZ, DEVICE
 class SegmentationService:
     def __init__(self):
         self.model = None
+        # True once a sonar-domain-trained checkpoint
+        # (backend/weights/yolov8n_seg_sss.pt) is loaded.
+        self.is_custom = False
 
     def load(self):
         if YOLO_SEG_WEIGHTS.exists():
             self.model = YOLO(str(YOLO_SEG_WEIGHTS))
+            self.is_custom = True
         else:
-            self.model = YOLO("yolov8n-seg.pt")
+            # No sonar-trained segmentation weights available. Generic
+            # COCO-pretrained yolov8n-seg masks (people, vehicles, animals,
+            # ...) don't correspond to anything meaningful in sonar
+            # backscatter imagery, so we skip straight to the acoustic
+            # intensity-threshold ROI mask instead of running COCO
+            # inference and pretending its masks are sonar target shapes.
+            print("Notice: no sonar-trained segmentation weights found "
+                  f"({YOLO_SEG_WEIGHTS}); using acoustic ROI masks instead "
+                  "of generic COCO YOLO-seg. Run scripts/train_yolo.py "
+                  "--mode segment to train sonar-specific weights.")
+            self.model = None
+            self.is_custom = False
 
     def segment(self, image: np.ndarray, detections: list[dict]) -> list[np.ndarray]:
         masks = []
-        if self.model is None:
+        if self.model is None and not self.is_custom:
             self.load()
 
         h, w = image.shape[:2]
 
-        if self.model is not None:
+        if self.model is not None and self.is_custom:
             try:
                 results = self.model.predict(
                     image,

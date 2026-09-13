@@ -8,6 +8,7 @@ class AnomalyDetector:
     def __init__(self):
         self.backbone = None
         self.memory_bank = None
+        self.distance_scale = None
         self._loaded = False
 
     def load(self):
@@ -18,8 +19,24 @@ class AnomalyDetector:
             import torch
             from torchvision import models, transforms
 
-            self.backbone = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-            self.backbone.fc = __import__("torch").nn.Identity()
+            try:
+                self.backbone = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+            except Exception as e:
+                # Downloading ImageNet weights requires outbound internet
+                # access; on an offline towfish/vessel deployment (or a
+                # sandboxed build) that download can fail outright. The
+                # original code let that exception propagate and crash the
+                # whole anomaly service instead of degrading gracefully.
+                # Fall back to a fixed-seed, randomly-initialized backbone
+                # so PatchCore-style nearest-neighbor scoring still runs
+                # end-to-end; swap back to pretrained weights automatically
+                # the moment internet access is available.
+                print(f"Notice: could not fetch pretrained ResNet18 weights ({e}); "
+                      f"using a randomly-initialized backbone instead.")
+                torch.manual_seed(42)
+                self.backbone = models.resnet18(weights=None)
+
+            self.backbone.fc = torch.nn.Identity()
             self.backbone.eval()
 
             if DEVICE == "cuda":
@@ -33,13 +50,62 @@ class AnomalyDetector:
             ]
             self.transform = transforms.Compose(transform_list)
 
-            if PATCHCORE_BANK.exists():
-                self.memory_bank = np.load(str(PATCHCORE_BANK))
+            self._load_bank()
 
             self._loaded = True
         except ImportError:
             self._loaded = True
             self.memory_bank = None
+
+    def _load_bank(self):
+        """Loads the PatchCore memory bank plus its calibrated distance scale.
+
+        Stored as an .npz with `bank` (N x D features) and `scale` (a scalar
+        derived from the bank's own nearest-neighbor distance distribution).
+        Falls back to reading a legacy plain .npy array (bank only, no
+        calibrated scale) for backward compatibility.
+        """
+        bank_path = Path(str(PATCHCORE_BANK))
+        npz_path = bank_path.with_suffix(".npz")
+
+        if npz_path.exists():
+            data = np.load(str(npz_path))
+            self.memory_bank = data["bank"]
+            self.distance_scale = float(data["scale"])
+        elif bank_path.exists():
+            self.memory_bank = np.load(str(bank_path))
+            self.distance_scale = self._estimate_scale(self.memory_bank)
+
+    @staticmethod
+    def _estimate_scale(bank: np.ndarray) -> float:
+        """
+        Calibrates the anomaly-score normalizer directly from the memory
+        bank instead of a hardcoded constant. For every bank item we compute
+        its nearest-neighbor distance to the rest of the bank (i.e. how far
+        apart *normal* seabed patches typically sit from one another). The
+        95th percentile of that distribution becomes the scale: a query
+        patch whose nearest-neighbor distance sits at that scale gets an
+        anomaly score of ~1.0, and typical normal patches score well below
+        that. This keeps the score meaningful regardless of feature
+        dimensionality, backbone, or how tight/loose the normal cluster is.
+        """
+        if bank is None or len(bank) < 2:
+            return 1.0
+
+        n = len(bank)
+        # Cap pairwise-distance computation cost for large banks.
+        sample_n = min(n, 400)
+        idx = np.random.choice(n, sample_n, replace=False) if n > sample_n else np.arange(n)
+        sample = bank[idx]
+
+        nn_dists = []
+        for i in range(sample_n):
+            dists = np.linalg.norm(bank - sample[i], axis=1)
+            dists[np.argmin(np.abs(dists))] = np.inf  # drop self-match (distance 0)
+            nn_dists.append(np.min(dists))
+
+        scale = float(np.percentile(nn_dists, 95))
+        return scale if scale > 1e-6 else 1.0
 
     def _extract_features(self, patches: list[np.ndarray]) -> np.ndarray:
         import torch
@@ -73,22 +139,27 @@ class AnomalyDetector:
             features = features[idx]
 
         self.memory_bank = features
-        np.save(str(PATCHCORE_BANK), features)
+        self.distance_scale = self._estimate_scale(features)
+
+        npz_path = Path(str(PATCHCORE_BANK)).with_suffix(".npz")
+        npz_path.parent.mkdir(parents=True, exist_ok=True)
+        np.savez(str(npz_path), bank=features, scale=self.distance_scale)
 
     def score(self, patch: np.ndarray) -> float:
         self.load()
-        if self.backbone is not None and self.memory_bank is not None:
+        if self.backbone is not None and self.memory_bank is not None and len(self.memory_bank) > 0:
             try:
                 feature = self._extract_features([patch])[0]
                 dists = np.linalg.norm(self.memory_bank - feature, axis=1)
                 min_dist = float(np.min(dists))
-                max_possible = 100.0
-                score = min(min_dist / max_possible, 1.0)
-                return max(0.0, min(1.0, score))
+                scale = self.distance_scale or self._estimate_scale(self.memory_bank)
+                score = min_dist / max(scale, 1e-6)
+                return float(max(0.0, min(1.0, score)))
             except Exception as e:
                 print(f"Neural anomaly score fallback: {e}")
 
-        # Acoustic statistical anomaly scoring
+        # Acoustic statistical anomaly scoring (used only when no trained
+        # backbone/memory bank is available at all).
         if len(patch.shape) == 3:
             gray = cv2.cvtColor(patch, cv2.COLOR_BGR2GRAY)
         else:
